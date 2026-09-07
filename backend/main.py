@@ -1,8 +1,6 @@
 from pathlib import Path
 import os
 import sys
-from typing import Literal
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -62,12 +60,12 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/api/models")
+@app.get("/models")
 def models():
     return {"models": registry.list_models()}
 
 
-@app.post("/api/cost")
+@app.post("/cost")
 def cost(request: CostRequest):
     input_tokens = count_tokens(request.prompt, request.model)
     output_tokens = max(20, input_tokens // 3)
@@ -80,22 +78,22 @@ def cost(request: CostRequest):
     }
 
 
-@app.post("/api/complexity")
+@app.post("/complexity")
 def complexity(request: PromptRequest):
     return calculate_complexity(request.prompt)
 
 
-@app.post("/api/optimize")
+@app.post("/optimize")
 def optimize(request: PromptRequest):
     return optimize_prompt(request.prompt)
 
 
-@app.post("/api/recommend")
+@app.post("/recommend")
 def recommend(request: RecommendationRequest):
     return recommend_model(request.prompt, request.model)
 
 
-@app.post("/api/simulate")
+@app.post("/simulate")
 def simulate(request: SimulationRequest):
     return build_projection(
         request.users_per_day,
