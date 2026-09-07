@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM Cost Twin</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="hero">
+    <p class="eyebrow">ZERO-API AI FINOPS FRAMEWORK</p>
+    <h1>LLM Cost Twin</h1>
+    <p>A local mathematical simulation of AI application cost behaviour.</p>
+  </header>
+  <main>
+    <section class="controls card">
+      <label for="model">Model</label>
+      <select id="model"></select>
+      <span class="muted">No API keys required. Everything runs locally.</span>
+    </section>
+    <nav class="tabs" aria-label="Tools">
+      <button class="tab active" data-page="cost">Cost Calculator</button>
+      <button class="tab" data-page="complexity">Prompt Analyzer</button>
+      <button class="tab" data-page="optimize">Prompt Optimizer</button>
+      <button class="tab" data-page="recommend">Model Recommendation</button>
+      <button class="tab" data-page="simulate">FinOps Simulator</button>
+    </nav>
+
+    <section id="cost" class="page active card">
+      <h2>Cost Calculator</h2>
+      <textarea id="cost-prompt">Summarize the benefits of renewable energy for a business audience.</textarea>
+      <button class="primary" data-action="cost">Analyze Cost</button>
+      <div id="cost-result"></div>
+    </section>
+    <section id="complexity" class="page card">
+      <h2>Prompt Analyzer</h2>
+      <textarea id="complexity-prompt">You must carefully analyze the trade-offs, compare the constraints, and provide a detailed rationale before making a final recommendation.</textarea>
+      <button class="primary" data-action="complexity">Score Prompt</button>
+      <div id="complexity-result"></div>
+    </section>
+    <section id="optimize" class="page card">
+      <h2>Prompt Optimizer</h2>
+      <textarea id="optimize-prompt">Please carefully and thoroughly summarize the article in a concise and clear way while preserving the important points and key details.</textarea>
+      <button class="primary" data-action="optimize">Optimize</button>
+      <div id="optimize-result"></div>
+    </section>
+    <section id="recommend" class="page card">
+      <h2>Model Recommendation</h2>
+      <textarea id="recommend-prompt">Summarize the article and recommend the best action.</textarea>
+      <button class="primary" data-action="recommend">Recommend</button>
+      <div id="recommend-result"></div>
+    </section>
+    <section id="simulate" class="page card">
+      <h2>FinOps Simulator</h2>
+      <div class="form-grid">
+        <label>Users/day<input id="users" type="number" min="1" value="1000"></label>
+        <label>Requests/user<input id="requests" type="number" min="1" value="3"></label>
+        <label>Avg tokens/request<input id="tokens" type="number" min="1" value="800"></label>
+      </div>
+      <button class="primary" data-action="simulate">Simulate</button>
+      <div id="simulate-result"></div>
+    </section>
+  </main>
+  <div id="toast" role="status"></div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

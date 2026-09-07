@@ -1,0 +1,27 @@
+{
+  "GPT-4.1": {
+    "input_cost_per_million": 2.0,
+    "output_cost_per_million": 8.0,
+    "tokenizer": "cl100k_base"
+  },
+  "GPT-4o": {
+    "input_cost_per_million": 2.5,
+    "output_cost_per_million": 10.0,
+    "tokenizer": "cl100k_base"
+  },
+  "Claude": {
+    "input_cost_per_million": 3.0,
+    "output_cost_per_million": 15.0,
+    "tokenizer": "cl100k_base"
+  },
+  "Llama-3": {
+    "input_cost_per_million": 0.2,
+    "output_cost_per_million": 0.6,
+    "tokenizer": "cl100k_base"
+  },
+  "Mistral": {
+    "input_cost_per_million": 0.15,
+    "output_cost_per_million": 0.4,
+    "tokenizer": "cl100k_base"
+  }
+}
