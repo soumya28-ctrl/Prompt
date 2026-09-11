@@ -31,7 +31,9 @@ def test_optimization_reduces_tokens():
     result = optimize_prompt(prompt)
     assert result["optimized_prompt"] != prompt
     assert result["new_tokens"] <= result["original_tokens"]
-    assert result["percentage_saved"] >= 0
+    assert result["percentage_saved"] >= 40
+    assert "summarize" in result["optimized_prompt"]
+    assert "key points" in result["optimized_prompt"]
 
 
 def test_simulation_values():
