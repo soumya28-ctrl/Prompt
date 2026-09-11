@@ -78,6 +78,9 @@ while the `frontend` directory is served as the website. The frontend already
 uses the same-origin API URL, so no backend URL needs to be configured after
 deployment. Check `https://YOUR-VERCEL-DOMAIN/api/health` after deployment.
 
+Open `https://YOUR-VERCEL-DOMAIN/` to use the website. The `/api/health` URL is
+only a backend diagnostic and intentionally displays `{"status":"ok"}`.
+
 ## Architecture
 
 - Token cost engine: token counting, pricing, and model registry
