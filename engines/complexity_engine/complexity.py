@@ -11,7 +11,17 @@ REASONING_MARKERS = [
 
 def calculate_complexity(prompt):
     if not prompt:
-        return {"score": 0, "category": "Low", "explanation": "No prompt supplied."}
+        return {
+            "score": 0,
+            "category": "Low",
+            "explanation": "No prompt supplied.",
+            "word_count": 0,
+            "sentence_count": 0,
+            "instruction_density": 0,
+            "keyword_complexity": 0,
+            "entropy": 0,
+            "reasoning_indicators": 0,
+        }
 
     sentences = [s for s in re.split(r"(?<=[.!?])\s+", prompt.strip()) if s]
     token_count = len(prompt.split())
@@ -32,4 +42,14 @@ def calculate_complexity(prompt):
         f"The prompt contains {token_count} words across {len(sentences)} sentence(s), with instruction density {instruction_density:.1f}%, "
         f"keyword density {keyword_complexity:.1f}%, entropy {entropy:.2f}, and {reasoning_indicators} reasoning markers."
     )
-    return {"score": int(numeric_score), "category": category, "explanation": explanation}
+    return {
+        "score": int(numeric_score),
+        "category": category,
+        "explanation": explanation,
+        "word_count": token_count,
+        "sentence_count": len(sentences),
+        "instruction_density": instruction_density,
+        "keyword_complexity": keyword_complexity,
+        "entropy": entropy,
+        "reasoning_indicators": reasoning_indicators,
+    }

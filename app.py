@@ -2,6 +2,7 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 
+from engines.batch_analyzer import analyze_prompts, batch_results_csv, parse_prompt_file
 from engines.complexity_engine.complexity import calculate_complexity
 from engines.optimizer.prompt_optimizer import optimize_prompt
 from engines.recommendation.model_router import recommend_model
@@ -25,7 +26,7 @@ with st.sidebar:
 
 page = st.radio(
     "Navigation",
-    ["Cost Calculator", "Prompt Analyzer", "Prompt Optimizer", "Model Recommendation", "FinOps Simulator"],
+    ["Cost Calculator", "Prompt Analyzer", "Prompt Optimizer", "Bulk Prompt Report", "Model Recommendation", "FinOps Simulator"],
     horizontal=True,
 )
 
@@ -68,6 +69,35 @@ elif page == "Prompt Optimizer":
         st.metric("Original tokens", result["original_tokens"])
         st.metric("New tokens", result["new_tokens"])
         st.metric("Percentage saved", f"{result['percentage_saved']}%")
+
+elif page == "Bulk Prompt Report":
+    st.subheader("Bulk Prompt Report")
+    st.caption("Upload an .xlsx or UTF-8 CSV with a 'prompt' column (or prompts in the first column). Maximum 500 prompts / 5 MB.")
+    uploaded_file = st.file_uploader("Prompt spreadsheet", type=["xlsx", "csv"])
+    if uploaded_file and st.button("Analyze prompts"):
+        try:
+            prompts = parse_prompt_file(uploaded_file.getvalue(), uploaded_file.name)
+            report = analyze_prompts(prompts, selected_model)
+            summary = report["summary"]
+            columns = st.columns(4)
+            columns[0].metric("Prompts analyzed", summary["prompt_count"])
+            columns[1].metric("Average complexity", f'{summary["average_complexity_score"]}/100')
+            columns[2].metric("Prompts reduced", f'{summary["prompts_reduced"]}/{summary["prompt_count"]}')
+            columns[3].metric("Tokens saved", f'{summary["tokens_saved"]} ({summary["percentage_saved"]}%)')
+            columns = st.columns(3)
+            columns[0].metric("Estimated cost before", f'${summary["estimated_cost_before"]:.6f}')
+            columns[1].metric("Estimated cost after", f'${summary["estimated_cost_after"]:.6f}')
+            columns[2].metric("Estimated cost savings", f'${summary["estimated_cost_savings"]:.6f}')
+            st.info(f'{summary["accuracy"]} Complexity and optimization results are heuristic estimates, not an accuracy benchmark.')
+            st.dataframe(report["results"], use_container_width=True)
+            st.download_button(
+                "Download full CSV report",
+                data=batch_results_csv(report).encode("utf-8-sig"),
+                file_name="prompt-analysis-report.csv",
+                mime="text/csv",
+            )
+        except ValueError as error:
+            st.error(str(error))
 
 elif page == "Model Recommendation":
     st.subheader("Model Recommendation")

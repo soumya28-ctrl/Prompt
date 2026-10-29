@@ -4,7 +4,7 @@ from engines.optimizer.compression import compress_text
 from engines.token_engine.token_counter import count_tokens
 
 
-def optimize_prompt(prompt):
+def optimize_prompt(prompt, model="GPT-4.1"):
     if not prompt:
         return {
             "original_prompt": "",
@@ -18,11 +18,11 @@ def optimize_prompt(prompt):
     compressed = compress_text(original)
     compressed = re.sub(r"\s+", " ", compressed).strip()
 
-    original_tokens = count_tokens(original, "GPT-4.1")
-    new_tokens = count_tokens(compressed, "GPT-4.1")
+    original_tokens = count_tokens(original, model)
+    new_tokens = count_tokens(compressed, model)
 
     optimized = compressed if new_tokens < original_tokens else original
-    new_tokens = count_tokens(optimized, "GPT-4.1")
+    new_tokens = count_tokens(optimized, model)
 
     percentage_saved = round(max(0.0, ((original_tokens - new_tokens) / original_tokens) * 100), 2) if original_tokens else 0.0
     return {

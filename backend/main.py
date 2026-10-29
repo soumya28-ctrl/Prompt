@@ -1,15 +1,15 @@
 from pathlib import Path
 import os
 import sys
-from fastapi import FastAPI
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from engines.batch_analyzer import analyze_prompts, parse_prompt_file
 from engines.complexity_engine.complexity import calculate_complexity
 from engines.optimizer.prompt_optimizer import optimize_prompt
 from engines.recommendation.model_router import recommend_model
@@ -42,6 +42,10 @@ class PromptRequest(BaseModel):
 
 class CostRequest(PromptRequest):
     model: ModelName = "GPT-4.1"
+
+
+class OptimizeRequest(CostRequest):
+    pass
 
 
 class RecommendationRequest(PromptRequest):
@@ -84,8 +88,21 @@ def complexity(request: PromptRequest):
 
 
 @app.post("/optimize")
-def optimize(request: PromptRequest):
-    return optimize_prompt(request.prompt)
+def optimize(request: OptimizeRequest):
+    return optimize_prompt(request.prompt, request.model)
+
+
+@app.post("/batch-analyze")
+async def batch_analyze(
+    file: UploadFile = File(...),
+    model: str = Form("GPT-4.1"),
+):
+    contents = await file.read(5 * 1024 * 1024 + 1)
+    try:
+        prompts = parse_prompt_file(contents, file.filename or "")
+        return analyze_prompts(prompts, model)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 @app.post("/recommend")

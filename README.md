@@ -11,6 +11,7 @@ Predictive LLM Cost Digital Twin without API execution.
 - Local token counting and cost estimation
 - Prompt complexity scoring
 - Prompt compression and optimization
+- Batch analysis of up to 500 prompts from Excel or CSV with downloadable metrics
 - Model recommendation based on task and complexity
 - FinOps simulation for daily, monthly, and yearly budgets
 
@@ -76,10 +77,15 @@ Vercel can host both parts under one URL using the included `vercel.json`:
 The `api/index.py` serverless entrypoint exposes the FastAPI backend at `/api`,
 while the `frontend` directory is served as the website. The frontend already
 uses the same-origin API URL, so no backend URL needs to be configured after
-deployment. Check `https://YOUR-VERCEL-DOMAIN/api/health` after deployment.
+deployment. The root `requirements.txt` includes the upload dependencies required
+by the batch-analysis route. Push updated code and wait for Vercel to finish a
+new deployment before testing; existing deployments do not receive local
+changes automatically.
 
 Open `https://YOUR-VERCEL-DOMAIN/` to use the website. The `/api/health` URL is
-only a backend diagnostic and intentionally displays `{"status":"ok"}`.
+only a backend diagnostic and intentionally displays `{"status":"ok"}`. Also
+check `/api/models`; it should return the model list. If either endpoint fails,
+review the Vercel function logs for the deployment before retrying the site.
 
 ## Architecture
 
@@ -88,6 +94,21 @@ only a backend diagnostic and intentionally displays `{"status":"ok"}`.
 - Optimizer: prompt compression and redundancy reduction
 - Recommendation engine: task-to-model routing
 - Simulator: forecast of costs under expected traffic
+
+## Bulk prompt analysis
+
+Use **Bulk Prompt Report** in either interface to upload an `.xlsx` workbook or
+UTF-8 `.csv` file (up to 5 MB) containing at most 500 prompts. Put prompts in a
+column named `prompt` (also accepts `prompts`, `prompt_text`, `text`, or
+`input`), or in the first column. The report includes all six existing prompt
+complexity signals—word count, sentence count, instruction density, keyword
+complexity, entropy, and reasoning-indicator count—plus token reduction,
+estimated cost before and after optimization, and a downloadable row-by-row CSV.
+
+The project does not execute prompts against an AI model and does not receive
+reference answers. Therefore it cannot measure answer accuracy or semantic
+quality; those fields are explicitly reported as not evaluated. Complexity and
+cost figures are heuristic or estimated.
 
 ## Mathematical Explanation
 

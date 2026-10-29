@@ -16,12 +16,13 @@
     <section class="controls card">
       <label for="model">Model</label>
       <select id="model"></select>
-      <span class="muted">No API keys required. Everything runs locally.</span>
+      <span id="model-status" class="muted">Loading model options…</span>
     </section>
     <nav class="tabs" aria-label="Tools">
       <button class="tab active" data-page="cost">Cost Calculator</button>
       <button class="tab" data-page="complexity">Prompt Analyzer</button>
       <button class="tab" data-page="optimize">Prompt Optimizer</button>
+      <button class="tab" data-page="batch">Bulk Prompt Report</button>
       <button class="tab" data-page="recommend">Model Recommendation</button>
       <button class="tab" data-page="simulate">FinOps Simulator</button>
     </nav>
@@ -43,6 +44,15 @@
       <textarea id="optimize-prompt">Please carefully and thoroughly summarize the article in a concise and clear way while preserving the important points and key details.</textarea>
       <button class="primary" data-action="optimize">Optimize</button>
       <div id="optimize-result"></div>
+    </section>
+    <section id="batch" class="page card">
+      <h2>Bulk Prompt Report</h2>
+      <p>Upload an Excel (.xlsx) or UTF-8 CSV file with prompts in a column named “prompt” (or in the first column). Up to 500 prompts and 5 MB per file.</p>
+      <label for="batch-file">Prompt spreadsheet</label>
+      <input id="batch-file" type="file" accept=".xlsx,.csv">
+      <button id="batch-run" class="primary">Analyze prompts</button>
+      <p class="muted">Runs through this app’s analysis API; no prompts are sent to an AI model. Accuracy cannot be measured without model outputs and reference answers.</p>
+      <div id="batch-result"></div>
     </section>
     <section id="recommend" class="page card">
       <h2>Model Recommendation</h2>

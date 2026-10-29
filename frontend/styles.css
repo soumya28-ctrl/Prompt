@@ -9,8 +9,10 @@ main { max-width: 1100px; margin: 28px auto; padding: 0 18px; }
 .card { background: white; border: 1px solid #e1e7f0; border-radius: 14px; padding: 24px; box-shadow: 0 8px 25px #19243b0d; }
 .controls { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
 select, input, textarea { border: 1px solid #cbd5e1; border-radius: 8px; padding: 11px; font: inherit; }
+input[type="file"] { display: block; margin: 12px 0; max-width: 100%; }
 textarea { display: block; width: 100%; min-height: 150px; margin: 15px 0; resize: vertical; }
 .muted { color: #65728a; font-size: .9rem; }
+.error-text { color: #b42318; }
 .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
 button { border: 0; border-radius: 8px; padding: 11px 15px; cursor: pointer; font-weight: 700; }
 .tab { background: #e7edf6; color: #33415c; }
@@ -23,6 +25,7 @@ button { border: 0; border-radius: 8px; padding: 11px 15px; cursor: pointer; fon
 .metric strong { display: block; margin-top: 6px; font-size: 1.25rem; }
 .notice { padding: 14px; background: #eef5ff; border-left: 4px solid #2764e7; }
 table { width: 100%; border-collapse: collapse; } th, td { padding: 11px; border-bottom: 1px solid #e1e7f0; text-align: left; }
+.table-scroll { overflow-x: auto; }
 .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; } label input { display: block; width: 100%; margin-top: 6px; }
 .bars { margin-top: 25px; } .bar-row { display: grid; grid-template-columns: 70px 1fr 100px; gap: 12px; align-items: center; margin: 15px 0; }
 .bar { height: 18px; background: #e6ebf4; border-radius: 12px; overflow: hidden; } .bar i { display: block; height: 100%; background: #2764e7; }
