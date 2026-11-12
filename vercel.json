@@ -13,11 +13,27 @@
   "routes": [
     {
       "src": "/api",
-      "dest": "/api/index.py"
+      "dest": "/api/index.py?route=health"
+    },
+    {
+      "src": "/api/health",
+      "dest": "/api/index.py?route=health"
+    },
+    {
+      "src": "/api/models",
+      "dest": "/api/index.py?route=models"
+    },
+    {
+      "src": "/api/analyze",
+      "dest": "/api/index.py?route=analyze"
+    },
+    {
+      "src": "/api/batch-analyze",
+      "dest": "/api/index.py?route=analyze"
     },
     {
       "src": "/api/(.*)",
-      "dest": "/api/index.py"
+      "dest": "/api/index.py?route=not-found"
     },
     {
       "handle": "filesystem"
@@ -29,6 +45,17 @@
     {
       "src": "/(.*)",
       "dest": "/frontend/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
     }
   ]
 }

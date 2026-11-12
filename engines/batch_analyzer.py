@@ -1,55 +1,98 @@
 import csv
+import math
+import re
+import zipfile
 from io import BytesIO, StringIO
 
 from openpyxl import load_workbook
 
-from engines.complexity_engine.complexity import calculate_complexity
-from engines.optimizer.prompt_optimizer import optimize_prompt
-from engines.token_engine.model_registry import ModelRegistry
-from engines.token_engine.token_counter import calculate_cost
 
-
+MODELS = {
+    "GPT-4.1": {"input_cost_per_million": 2.0, "output_cost_per_million": 8.0},
+    "GPT-4o": {"input_cost_per_million": 2.5, "output_cost_per_million": 10.0},
+    "Claude": {"input_cost_per_million": 3.0, "output_cost_per_million": 15.0},
+    "Llama-3": {"input_cost_per_million": 0.2, "output_cost_per_million": 0.6},
+    "Mistral": {"input_cost_per_million": 0.15, "output_cost_per_million": 0.4},
+}
 MAX_PROMPTS = 500
-MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+MAX_UPLOAD_BYTES = 4 * 1024 * 1024
+MAX_WORKBOOK_BYTES = 25 * 1024 * 1024
+MAX_WORKSHEET_ROWS = 10_000
+MAX_PROMPT_CHARS = 50_000
+MAX_TOTAL_PROMPT_CHARS = 1_000_000
 PROMPT_HEADERS = {"prompt", "prompts", "prompt_text", "text", "input"}
-COMPLEXITY_METRICS = (
-    "word_count",
-    "sentence_count",
-    "instruction_density",
-    "keyword_complexity",
-    "entropy",
-    "reasoning_indicators",
-)
+INSTRUCTION_WORDS = {
+    "please", "must", "should", "ensure", "provide", "analyze", "compare",
+    "evaluate", "recommend", "summarize", "explain", "write", "create",
+    "describe", "list", "include", "avoid", "return",
+}
+REASONING_MARKERS = {
+    "analyze", "compare", "evaluate", "reason", "trade-off", "constraint",
+    "recommendation", "detailed", "strategy", "decision", "rationale",
+}
+WORD_PATTERN = re.compile(r"\b[\w'-]+\b", re.UNICODE)
+TOKEN_PATTERN = re.compile(r"\w+|[^\w\s]", re.UNICODE)
+SENTENCE_PATTERN = re.compile(r"(?<=[.!?])\s+")
+
+
+def load_models():
+    return MODELS.copy()
+
+
+def _read_csv(contents):
+    try:
+        text = contents.decode("utf-8-sig")
+        rows = []
+        for row_number, row in enumerate(csv.reader(StringIO(text)), start=1):
+            if any(value.strip() for value in row):
+                rows.append(row)
+            if row_number > MAX_WORKSHEET_ROWS:
+                raise ValueError(
+                    f"The CSV exceeds the {MAX_WORKSHEET_ROWS:,}-row processing limit."
+                )
+        return rows
+    except UnicodeDecodeError as error:
+        raise ValueError("CSV files must use UTF-8 encoding.") from error
+    except csv.Error as error:
+        raise ValueError("Could not read the CSV file. Check its formatting.") from error
+
+
+def _read_xlsx(contents):
+    try:
+        with zipfile.ZipFile(BytesIO(contents)) as archive:
+            uncompressed_size = sum(entry.file_size for entry in archive.infolist())
+            if uncompressed_size > MAX_WORKBOOK_BYTES:
+                raise ValueError("The Excel workbook expands beyond the 25 MB safety limit.")
+        workbook = load_workbook(BytesIO(contents), read_only=True, data_only=True)
+    except ValueError:
+        raise
+    except Exception as error:
+        raise ValueError("Could not read the Excel file. Please upload a valid .xlsx workbook.") from error
+
+    try:
+        rows = []
+        for row_number, row in enumerate(workbook.active.iter_rows(values_only=True), start=1):
+            values = list(row)
+            if any(value is not None and str(value).strip() for value in values):
+                rows.append(values)
+            if row_number > MAX_WORKSHEET_ROWS:
+                raise ValueError(
+                    f"The worksheet exceeds the {MAX_WORKSHEET_ROWS:,}-row processing limit."
+                )
+        return rows
+    finally:
+        workbook.close()
 
 
 def parse_prompt_file(contents, filename):
     if len(contents) > MAX_UPLOAD_BYTES:
-        raise ValueError("The uploaded file exceeds the 5 MB limit.")
+        raise ValueError("The uploaded file exceeds the 4 MB limit.")
 
-    extension = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if extension == "csv":
-        try:
-            rows = list(csv.reader(StringIO(contents.decode("utf-8-sig"))))
-        except UnicodeDecodeError as error:
-            raise ValueError("CSV files must use UTF-8 encoding.") from error
-        except csv.Error as error:
-            raise ValueError("Could not read the CSV file. Check its formatting.") from error
+        rows = _read_csv(contents)
     elif extension == "xlsx":
-        try:
-            workbook = load_workbook(BytesIO(contents), read_only=True, data_only=True)
-            try:
-                sheet = workbook.active
-                rows = []
-                for row in sheet.iter_rows(values_only=True):
-                    rows.append(list(row))
-                    if len(rows) > MAX_PROMPTS + 1:
-                        raise ValueError(f"The spreadsheet may contain at most {MAX_PROMPTS} prompts.")
-            finally:
-                workbook.close()
-        except ValueError:
-            raise
-        except Exception as error:
-            raise ValueError("Could not read the Excel file. Please upload a valid .xlsx workbook.") from error
+        rows = _read_xlsx(contents)
     else:
         raise ValueError("Upload an .xlsx Excel workbook or a .csv file.")
 
@@ -57,109 +100,186 @@ def parse_prompt_file(contents, filename):
         raise ValueError("The uploaded file contains no prompts.")
 
     first_row = rows[0]
+    normalized_headers = [str(value or "").strip().lower() for value in first_row]
     prompt_column = next(
-        (
-            index
-            for index, value in enumerate(first_row)
-            if str(value or "").strip().lower() in PROMPT_HEADERS
-        ),
+        (index for index, value in enumerate(normalized_headers) if value in PROMPT_HEADERS),
         0,
     )
-    has_header = any(
-        str(value or "").strip().lower() in PROMPT_HEADERS for value in first_row
-    )
-    data_rows = rows[1:] if has_header else rows
-    prompts = [
-        str(row[prompt_column]).strip()
-        for row in data_rows
-        if len(row) > prompt_column and row[prompt_column] is not None
-        and str(row[prompt_column]).strip()
-    ]
+    has_header = any(value in PROMPT_HEADERS for value in normalized_headers)
+    prompt_rows = rows[1:] if has_header else rows
+    prompts = []
+    total_prompt_chars = 0
+    for row in prompt_rows:
+        if prompt_column >= len(row) or row[prompt_column] is None:
+            continue
+        prompt = str(row[prompt_column]).strip()
+        if prompt:
+            if len(prompt) > MAX_PROMPT_CHARS:
+                raise ValueError(
+                    f"Each prompt must be {MAX_PROMPT_CHARS:,} characters or fewer."
+                )
+            prompts.append(prompt)
+            if len(prompts) > MAX_PROMPTS:
+                raise ValueError(f"The spreadsheet may contain at most {MAX_PROMPTS} prompts.")
+            total_prompt_chars += len(prompt)
+            if total_prompt_chars > MAX_TOTAL_PROMPT_CHARS:
+                raise ValueError("The combined prompts exceed the 1,000,000-character processing limit.")
 
-    if len(prompts) > MAX_PROMPTS:
-        raise ValueError(f"The spreadsheet may contain at most {MAX_PROMPTS} prompts.")
     if not prompts:
         raise ValueError("No prompts found. Add a 'prompt' column or put prompts in the first column.")
     return prompts
 
 
-def analyze_prompts(prompts, model="GPT-4.1"):
-    if model not in ModelRegistry().list_models():
-        raise ValueError("Select a supported model.")
+def _estimate_tokens(text):
+    return len(TOKEN_PATTERN.findall(text))
+
+
+def _complexity(prompt):
+    words = WORD_PATTERN.findall(prompt)
+    word_count = len(words)
+    sentences = [sentence for sentence in SENTENCE_PATTERN.split(prompt.strip()) if sentence.strip()]
+    lower_words = [word.lower() for word in words]
+    instruction_count = sum(word in INSTRUCTION_WORDS for word in lower_words)
+    instruction_density = round(instruction_count / max(1, word_count) * 100, 2)
+    long_word_count = sum(len(word) >= 6 for word in words)
+    keyword_complexity = round(long_word_count / max(1, word_count) * 100, 2)
+
+    frequencies = {}
+    for word in lower_words:
+        frequencies[word] = frequencies.get(word, 0) + 1
+    entropy = round(
+        -sum((count / max(1, word_count)) * math.log2(count / max(1, word_count))
+             for count in frequencies.values()),
+        3,
+    )
+    reasoning_count = sum(
+        marker in prompt.lower() for marker in REASONING_MARKERS
+    )
+    score = min(100, round(
+        (word_count / 20) * 0.35
+        + len(sentences) * 6
+        + instruction_density * 0.35
+        + keyword_complexity * 0.25
+        + entropy * 4
+        + reasoning_count * 3
+    ))
+    category = "High" if score >= 70 else "Medium" if score >= 35 else "Low"
+    return {
+        "complexity_score": score,
+        "complexity_category": category,
+        "word_count": word_count,
+        "sentence_count": len(sentences),
+        "instruction_density": instruction_density,
+        "keyword_complexity": keyword_complexity,
+        "entropy": entropy,
+        "reasoning_indicators": reasoning_count,
+    }
+
+
+def _optimize_prompt(prompt):
+    optimized = re.sub(r"\s+", " ", prompt).strip()
+    optimized = re.sub(
+        r"^(?:(?:please|kindly)\b[,:]?\s+)+",
+        "",
+        optimized,
+        flags=re.IGNORECASE,
+    )
+
+    original_tokens = _estimate_tokens(prompt)
+    optimized_tokens = _estimate_tokens(optimized)
+    if optimized_tokens >= original_tokens:
+        optimized = prompt
+        optimized_tokens = original_tokens
+
+    saved = round(
+        (original_tokens - optimized_tokens) / original_tokens * 100, 2
+    ) if original_tokens else 0.0
+    return optimized, original_tokens, optimized_tokens, saved
+
+
+def _cost(input_tokens, output_tokens, model_config):
+    return round(
+        input_tokens / 1_000_000 * model_config["input_cost_per_million"]
+        + output_tokens / 1_000_000 * model_config["output_cost_per_million"],
+        8,
+    )
+
+
+def analyze_prompts(prompts, model):
+    models = load_models()
+    if model not in models:
+        raise ValueError("Select one of the available models.")
     if not prompts:
         raise ValueError("Provide at least one prompt.")
     if len(prompts) > MAX_PROMPTS:
         raise ValueError(f"Analyze at most {MAX_PROMPTS} prompts at a time.")
+    if any(not isinstance(prompt, str) or len(prompt) > MAX_PROMPT_CHARS for prompt in prompts):
+        raise ValueError(f"Each prompt must be text with at most {MAX_PROMPT_CHARS:,} characters.")
+    if sum(map(len, prompts)) > MAX_TOTAL_PROMPT_CHARS:
+        raise ValueError("The combined prompts exceed the 1,000,000-character processing limit.")
 
-    results = []
-    for index, prompt in enumerate(prompts, start=1):
-        complexity = calculate_complexity(prompt)
-        optimization = optimize_prompt(prompt, model)
-        original_tokens = optimization["original_tokens"]
-        optimized_tokens = optimization["new_tokens"]
-        original_output_tokens = max(20, original_tokens // 3)
-        optimized_output_tokens = max(20, optimized_tokens // 3)
-        original_cost = calculate_cost(original_tokens, original_output_tokens, model)
-        optimized_cost = calculate_cost(optimized_tokens, optimized_output_tokens, model)
-
-        results.append({
-            "prompt_number": index,
+    rows = []
+    for number, prompt in enumerate(prompts, start=1):
+        complexity = _complexity(prompt)
+        optimized, original_tokens, optimized_tokens, saved = _optimize_prompt(prompt)
+        original_cost = _cost(
+            original_tokens, max(20, original_tokens // 3), models[model]
+        )
+        optimized_cost = _cost(
+            optimized_tokens, max(20, optimized_tokens // 3), models[model]
+        )
+        rows.append({
+            "prompt_number": number,
             "prompt": prompt,
-            "optimized_prompt": optimization["optimized_prompt"],
-            "complexity_score": complexity["score"],
-            "complexity_category": complexity["category"],
-            **{metric: complexity[metric] for metric in COMPLEXITY_METRICS},
-            "accuracy_evaluation": "Not evaluated: no model outputs or reference answers supplied.",
-            "original_tokens": original_tokens,
-            "optimized_tokens": optimized_tokens,
-            "tokens_saved": original_tokens - optimized_tokens,
-            "percentage_saved": optimization["percentage_saved"],
+            "optimized_prompt": optimized,
+            **complexity,
+            "original_tokens_estimate": original_tokens,
+            "optimized_tokens_estimate": optimized_tokens,
+            "tokens_saved_estimate": original_tokens - optimized_tokens,
+            "percentage_saved": saved,
             "estimated_cost_before": original_cost,
             "estimated_cost_after": optimized_cost,
-            "estimated_cost_savings": round(original_cost - optimized_cost, 6),
+            "estimated_cost_savings": round(original_cost - optimized_cost, 8),
+            "accuracy_evaluation": "Not evaluated: no model outputs or reference answers supplied.",
         })
 
-    total_original_tokens = sum(row["original_tokens"] for row in results)
-    total_optimized_tokens = sum(row["optimized_tokens"] for row in results)
-    total_cost_before = round(sum(row["estimated_cost_before"] for row in results), 6)
-    total_cost_after = round(sum(row["estimated_cost_after"] for row in results), 6)
-    prompt_count = len(results)
-    return {
+    original_tokens = sum(row["original_tokens_estimate"] for row in rows)
+    optimized_tokens = sum(row["optimized_tokens_estimate"] for row in rows)
+    cost_before = round(sum(row["estimated_cost_before"] for row in rows), 8)
+    cost_after = round(sum(row["estimated_cost_after"] for row in rows), 8)
+    count = len(rows)
+    summary = {
+        "prompt_count": count,
         "model": model,
-        "summary": {
-            "prompt_count": prompt_count,
-            "average_complexity_score": round(
-                sum(row["complexity_score"] for row in results) / prompt_count, 2
-            ),
-            "high_complexity_prompts": sum(
-                row["complexity_category"] == "High" for row in results
-            ),
-            "prompts_reduced": sum(row["tokens_saved"] > 0 for row in results),
-            "original_tokens": total_original_tokens,
-            "optimized_tokens": total_optimized_tokens,
-            "tokens_saved": total_original_tokens - total_optimized_tokens,
-            "percentage_saved": round(
-                (total_original_tokens - total_optimized_tokens)
-                / total_original_tokens * 100,
-                2,
-            ) if total_original_tokens else 0.0,
-            "estimated_cost_before": total_cost_before,
-            "estimated_cost_after": total_cost_after,
-            "estimated_cost_savings": round(total_cost_before - total_cost_after, 6),
-            "accuracy": "Not evaluated: no model outputs or reference answers supplied.",
-        },
-        "results": results,
+        "average_complexity_score": round(
+            sum(row["complexity_score"] for row in rows) / count, 2
+        ),
+        "high_complexity_prompts": sum(row["complexity_category"] == "High" for row in rows),
+        "prompts_reduced": sum(row["tokens_saved_estimate"] > 0 for row in rows),
+        "original_tokens_estimate": original_tokens,
+        "optimized_tokens_estimate": optimized_tokens,
+        "tokens_saved_estimate": original_tokens - optimized_tokens,
+        "percentage_saved": round(
+            (original_tokens - optimized_tokens) / original_tokens * 100, 2
+        ) if original_tokens else 0.0,
+        "estimated_cost_before": cost_before,
+        "estimated_cost_after": cost_after,
+        "estimated_cost_savings": round(cost_before - cost_after, 8),
+        "accuracy_evaluation": "Not evaluated: no model outputs or reference answers supplied.",
     }
+    return {"summary": summary, "results": rows}
 
 
-def batch_results_csv(report):
+def results_csv(rows):
+    if not rows:
+        raise ValueError("There are no prompt results to export.")
     output = StringIO()
-    fieldnames = list(report["results"][0])
-    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+    writer = csv.DictWriter(output, fieldnames=list(rows[0]))
     writer.writeheader()
-    for row in report["results"]:
-        writer.writerow({
+    for row in rows:
+        safe_row = {
             key: "'" + value if isinstance(value, str) and value.startswith(("=", "+", "-", "@")) else value
             for key, value in row.items()
-        })
+        }
+        writer.writerow(safe_row)
     return output.getvalue()

@@ -1,125 +1,57 @@
-# LLM Cost Twin
+# Prompt Bench
 
-LLM Cost Twin is a local research prototype for predicting and optimizing AI application costs without sending prompts to any external API. The framework models token usage, prompt complexity, optimizer behavior, model selection, and long-horizon FinOps simulation as a mathematical digital twin of LLM application cost behavior.
-Website Link :https://prompt-eta-pearl.vercel.app/
-## Research Idea
+A lightweight prompt-analysis web app. Upload an Excel workbook or UTF-8 CSV
+containing up to 500 prompts to receive transparent complexity indicators,
+conservative text compression, approximate token/cost comparisons, and a
+downloadable CSV report.
 
-Predictive LLM Cost Digital Twin without API execution.
+The app does not send prompts to an AI model. Consequently it does not measure
+answer accuracy or semantic quality; reference answers and model outputs would
+be required for those evaluations.
 
-## Features
+## Run and deploy
 
-- Local token counting and cost estimation
-- Prompt complexity scoring
-- Prompt compression and optimization
-- Batch analysis of up to 500 prompts from Excel or CSV with downloadable metrics
-- Model recommendation based on task and complexity
-- FinOps simulation for daily, monthly, and yearly budgets
+The project is configured for a single Vercel deployment:
 
-## Installation
+1. Import the repository in Vercel and set the project root to the repository
+   root.
+2. Deploy the `main` branch.
+3. Check `/api/health` for `{"status":"ok"}` and `/api/models` for the available
+   model names.
+4. Open `/` and confirm the page reports that the analysis service is connected.
 
-```bash
-python -m pip install -r requirements.txt
-```
+The status banner includes the API version so you can verify that the browser
+is talking to the newly deployed service rather than a stale page or function.
 
-## Running
+The root `requirements.txt` intentionally contains only the Excel workbook
+reader. API endpoints are implemented with Python's standard-library HTTP
+handler. The static frontend and API are same-origin, so no CORS configuration
+or API URL setting is required.
 
-```bash
-streamlit run app.py
-```
+## Input format
 
-## Netlify + API deployment
+- `.xlsx` Excel workbook or UTF-8 `.csv` file
+- Up to 4 MB and 500 non-empty prompts
+- Up to 50,000 characters per prompt and 1,000,000 combined prompt characters
+- Prompts in a column named `prompt`, `prompts`, `prompt_text`, `text`, or
+  `input`; otherwise the first column is used
 
-The Streamlit app remains available for local use, but Netlify should host the
-new static frontend and a separate Python API should host the calculation
-engines.
+## Report fields
 
-### 1. Deploy the backend
+Each prompt includes six complexity signals: word count, sentence count,
+instruction density, keyword complexity, word entropy, and reasoning-indicator
+count. It also includes approximate token counts, token reduction, estimated
+cost before and after compression for the selected pricing model, the
+compressed prompt, and an explicit accuracy-not-evaluated label.
 
-Create a Render, Railway, or Fly.io web service from this repository with:
+Token counts use a local text heuristic rather than an official provider
+tokenizer. Model prices are configured in `engines/batch_analyzer.py`; confirm
+those estimates against your provider before making budget decisions.
 
-```bash
-# Build command
-pip install -r backend/requirements.txt
+## Project layout
 
-# Start command
-uvicorn backend.main:app --host 0.0.0.0 --port $PORT
-```
-
-After deployment, verify `https://YOUR-BACKEND-DOMAIN/health` returns
-`{"status":"ok"}`. Set the backend environment variable `ALLOWED_ORIGINS` to
-the Netlify site URL, for example `https://your-site.netlify.app`.
-
-### 2. Deploy the frontend to Netlify
-
-Set the Netlify publish directory to `frontend` (the included
-`netlify.toml` does this automatically). Before deploying, edit
-`frontend/config.js` and replace the local URL with the public backend URL:
-
-```js
-window.APP_CONFIG = {
-  API_BASE_URL: "https://YOUR-BACKEND-DOMAIN"
-};
-```
-
-The frontend calls `/api/models`, `/api/cost`, `/api/complexity`,
-`/api/optimize`, `/api/recommend`, and `/api/simulate`. These endpoints use the
-same existing Python engines and model registry as the Streamlit interface.
-
-## One-project Vercel deployment
-
-Vercel can host both parts under one URL using the included `vercel.json`:
-
-1. Push the complete repository to GitHub.
-2. Import the repository in Vercel.
-3. Keep the project root as the repository root.
-4. Deploy with the default settings.
-
-The `api/index.py` serverless entrypoint exposes the FastAPI backend at `/api`,
-while the `frontend` directory is served as the website. The frontend already
-uses the same-origin API URL, so no backend URL needs to be configured after
-deployment. The root `requirements.txt` includes the upload dependencies required
-by the batch-analysis route. Push updated code and wait for Vercel to finish a
-new deployment before testing; existing deployments do not receive local
-changes automatically.
-
-Open `https://YOUR-VERCEL-DOMAIN/` to use the website. The `/api/health` URL is
-only a backend diagnostic and intentionally displays `{"status":"ok"}`. Also
-check `/api/models`; it should return the model list. If either endpoint fails,
-review the Vercel function logs for the deployment before retrying the site.
-
-## Architecture
-
-- Token cost engine: token counting, pricing, and model registry
-- Complexity engine: prompt complexity and entropy scoring
-- Optimizer: prompt compression and redundancy reduction
-- Recommendation engine: task-to-model routing
-- Simulator: forecast of costs under expected traffic
-
-## Bulk prompt analysis
-
-Use **Bulk Prompt Report** in either interface to upload an `.xlsx` workbook or
-UTF-8 `.csv` file (up to 5 MB) containing at most 500 prompts. Put prompts in a
-column named `prompt` (also accepts `prompts`, `prompt_text`, `text`, or
-`input`), or in the first column. The report includes all six existing prompt
-complexity signals—word count, sentence count, instruction density, keyword
-complexity, entropy, and reasoning-indicator count—plus token reduction,
-estimated cost before and after optimization, and a downloadable row-by-row CSV.
-
-The project does not execute prompts against an AI model and does not receive
-reference answers. Therefore it cannot measure answer accuracy or semantic
-quality; those fields are explicitly reported as not evaluated. Complexity and
-cost figures are heuristic or estimated.
-
-## Mathematical Explanation
-
-The system estimates cost using:
-
-$$
-\text{Cost} = \frac{\text{input tokens}}{10^6} \times \text{input rate} + \frac{\text{output tokens}}{10^6} \times \text{output rate}
-$$
-
-Prompt complexity combines token count, sentence count, instruction density, keyword complexity, entropy, and reasoning indicators into a normalized score in the range 0 to 100.
-
-## Contribution
-
-This prototype demonstrates how a local digital twin can support AI cost planning before any model request is made.
+- `frontend/`: static interface
+- `api/index.py`: Vercel HTTP function entrypoint
+- `engines/batch_analyzer.py`: file parsing, prompt metrics, optimization, and
+  estimates
+- `tests/`: parser, analysis, and HTTP route tests

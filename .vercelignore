@@ -3,5 +3,4 @@ __pycache__
 .pytest_cache
 .git
 tests
-app.py
-netlify.toml
+*.md
